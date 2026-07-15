@@ -444,7 +444,7 @@ make help           # confirm VERSION / TAG and ROOT first
 make linux          # -> ../../release-artifacts/rincoin-<VERSION>-x86_64-linux-gnu.tar.gz
 make windows        # -> ../../release-artifacts/rincoin-<VERSION>-win64.zip
 make aarch64        # -> ../../release-artifacts/rincoin-<VERSION>-aarch64-linux-gnu.tar.gz
-make all            # all three, in sequence (always serial)
+make all-cli        # all three, CLI-only, in sequence (always serial)
 
 make linux-full     # same target with the Qt GUI (heavier)
 ```
@@ -466,7 +466,7 @@ Cross-compiling Qt via `depends` for Windows and ARM64 is the slowest and most f
 `make dist` produces the source tarball (`git archive` of the signed tag; see §9-1), and `make sign` writes the detached-signed manifest over **every** artifact present — the three binaries plus the source tarball — in one `SHA256SUMS` / `.asc` pair (§9). The full Linux-side flow is one command:
 
 ```bash
-make release        # == make all && make dist && make sign
+make release        # preflight (HEAD==tag, clean tree) + wipe + dist + all-release + sign
 ```
 
 Override the key with `make sign KEY=<fingerprint>` (default: the Core maintainer key, §9-3). The Linux build host is the default signing and publishing path; a Windows re-sign path for a hardware-token custody model is documented in [`contrib/release/README.md`](../contrib/release/README.md).

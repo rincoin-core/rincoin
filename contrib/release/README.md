@@ -9,7 +9,7 @@ checklist.
 
 ## Files
 
-- `Makefile` — the `make linux | windows | aarch64 | all | dist | sign | release` interface.
+- `Makefile` — the `make linux | windows | aarch64 | all-cli | all-release | dist | sign | release` interface. Bare targets are CLI-only; add `-full` (`linux-full`, `windows-full`) for the Qt GUI.
 - `sign.sh` — SHA256SUMS + GPG detached signature; portable (Linux and Windows Git Bash).
 
 ## Prerequisites (build host, Ubuntu 24.04)
@@ -42,14 +42,16 @@ cd contrib/release
 make windows        # -> ../../release-artifacts/rincoin-<VERSION>-win64.zip
 make aarch64        # -> ../../release-artifacts/rincoin-<VERSION>-aarch64-linux-gnu.tar.gz
 make linux          # -> ../../release-artifacts/rincoin-<VERSION>-x86_64-linux-gnu.tar.gz
-make all            # all three, in sequence (always serial)
+make all-cli        # all three, CLI-only, in sequence (always serial)
 ```
 
-Builds default to **CLI-only** (faster; validate the core first, per §10-4). Add the Qt GUI with `GUI=1` (much heavier; win/aarch64 Qt are the most fragile part):
+Bare targets are **CLI-only** (faster; validate the core first, per §10-4). The Qt GUI is selected by the target **name**, not a flag — append `-full` (much heavier; win/aarch64 Qt are the most fragile part):
 
 ```bash
-make GUI=1 windows
+make windows-full
 ```
+
+There is deliberately no `GUI=` flag; passing one is a hard error. `all-release` is the ship matrix — GUI on linux/win, CLI-only on aarch64.
 
 `<VERSION>` is parsed from `configure.ac` (RIP-0001 mapping → e.g. `1.1.0`) and carries **no leading `v`** — the `v` lives only on the git tag (`TAG`, e.g. `v1.1.0`), matching Bitcoin/Litecoin file naming. For a release candidate, the two split on purpose: the tag uses the readable Linux-style hyphen (`v1.1.0-rc1`), while files use the single-token `1.1.0rc1` (`rincoin-1.1.0rc1-win64.zip`) so the version parses unambiguously next to the hyphenated host triple and matches `rincoind -version` / automake's `PACKAGE_VERSION`. Both come from `_CLIENT_VERSION_RC` in `configure.ac`; override with `VERSION=...` / `TAG=...`.
 Parallelism is internal via `JOBS` (default `nproc`); do **not** pass `-j` to this Makefile — `.NOTPARALLEL` keeps the three targets from clobbering the shared source tree.
@@ -83,7 +85,7 @@ Signing covers **all** artifacts together in one manifest (the Bitcoin model —
 ```bash
 make sign           # -> ../../release-artifacts/SHA256SUMS(.asc)
 # or, the full Linux-side flow in one command:
-make release        # == make all && make dist && make sign
+make release        # preflight (HEAD==tag, clean tree) + wipe + dist + all-release + sign
 ```
 
 Override the key with `make sign KEY=<fingerprint>`. Default is the Core maintainer key from §9-3: `ED20 B635 4EE4 526D 01F8 3B53 8B6E 3BF4 5C71 4ECA`.

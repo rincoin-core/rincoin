@@ -451,6 +451,8 @@ make linux-full     # same target with the Qt GUI (heavier)
 
 The Makefile runs `depends` → `./autogen.sh` → `./configure` → `make` → stage → strip → archive for each target, teeing each build to `~/logs/<target>-<timestamp>.log`. Do **not** pass `-j`; parallelism is internal via `JOBS`, and `.NOTPARALLEL` keeps the three targets from clobbering the shared source tree. `VERSION` (bare, no `v`) and `TAG` (with `v`; RC `v1.1.0-rc1`) are parsed from `configure.ac` — see §8-3 and [`contrib/release/README.md`](../contrib/release/README.md).
 
+Every target is configured `--disable-tests`, so `test_rincoin` and `test_rincoin-qt` are never built into a release artifact — the same binary set §8-3 assembles by hand. This is independent of the native build (Part I), which keeps tests enabled so `make check` (§5) still runs; the two configure invocations do not interact. For a cross build whose test binary you want to run under Wine / qemu-user (§10-6), re-enable it for that run with `EXTRA_CONFIG=--enable-tests`.
+
 ### 10-4. Phase 1 → Phase 2 (why split)
 
 Cross-compiling Qt via `depends` for Windows and ARM64 is the slowest and most failure-prone part of the build. Validate the **core** first:
@@ -481,6 +483,7 @@ Override the key with `make sign KEY=<fingerprint>` (default: the Core maintaine
 - [ ] **Native target relocation:** if `x86_64-linux-gnu` hits `R_X86_64_PC32 relocation`, add `--with-pic` (as in the native build, Step 4) — the `linux` target already sets it; pass `EXTRA_CONFIG=--with-pic` for others if needed.
 - [ ] **Functional tests pass** for at least the native target before trusting the cross builds.
 - [ ] **Qt (Phase 2)** cross-builds without error for any target you intend to ship with a GUI.
+- [ ] **No test binary ships:** confirm each artifact contains no `test_rincoin` / `test_rincoin-qt` (`--disable-tests`). `make check-matrix` asserts this and refuses to sign otherwise; verify with `unzip -l` / `tar -tzf` after a clean `make release` (a partial rebuild can leave a stale artifact that trips the gate).
 - [ ] Record results (logs to `~/logs/`, evidence to Zenodo) and only then update the **Verified** line and remove the EXPERIMENTAL markers.
 
 ### 10-7. depends vs Guix (determinism)

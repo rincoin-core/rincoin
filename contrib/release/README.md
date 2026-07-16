@@ -62,8 +62,7 @@ If a target hits `R_X86_64_PC32 relocation`, add PIC for that run:
 EXTRA_CONFIG=--with-pic make linux
 ```
 
-(`linux` already builds with `--with-pic` by default, matching the native build in Part I. `--disable-tests` is another useful `EXTRA_CONFIG` to skip building
-`test_rincoin` for a pure release binary.)
+(`linux` already builds with `--with-pic` by default, matching the native build in Part I. Release artifacts are built `--disable-tests`, so no `test_rincoin` / `test_rincoin-qt` ship — matching the hand-picked binary set in §8-3. To re-add the cross test binary for running under Wine / qemu-user during §10-6 verification, pass `EXTRA_CONFIG=--enable-tests`.)
 
 > **`make linux` ≠ the native verified build.** This produces the *depends*-built, statically linked Linux binary — more portable for distribution, but still experimental. Keep the native Part I build as the blessed x86_64-linux release until depends-linux passes §10-6.
 

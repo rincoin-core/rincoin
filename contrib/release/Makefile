@@ -50,8 +50,12 @@
 #   KEY=<fpr>         # GPG signing key (default: the Core maintainer fingerprint below)
 #   LOGDIR=<dir>      # where per-build logs are written (default: ~/logs)
 #   ARM64_GUI=1       # unlock `aarch64-full` FOR TESTING ONLY (see the gate below)
-#   EXTRA_CONFIG=...  # extra ./configure flags, e.g. --with-pic on R_X86_64_PC32, or
-#                     #   --disable-tests to skip building test_rincoin (release binary)
+#   EXTRA_CONFIG=...  # extra ./configure flags, e.g. --with-pic on R_X86_64_PC32,
+#                     #   --without-miniupnpc, or --enable-tests to re-add the cross
+#                     #   test binary for running under wine / qemu-user (§10-6).
+#                     #   (--disable-tests is applied by default; release artifacts
+#                     #   never ship test binaries. `make check` is unaffected -- it
+#                     #   runs on the native Part I build, not this wrapper.)
 #
 # STATUS: cross-built binaries are EXPERIMENTAL for Rincoin. RinHash
 # (BLAKE3 -> Argon2d -> SHA3-256) and BDB-4.8 cross-builds are NOT yet confirmed
@@ -81,6 +85,14 @@ JOBS  ?= $(shell nproc 2>/dev/null || echo 4)
 # Qt GUI binary, as renamed in Makefile.qt.include (qt/litecoin-qt -> qt/rincoin-qt).
 # check-matrix greps the packaged listing for this exact path.
 QT_BIN := bin/rincoin-qt
+
+# Test binaries. --disable-tests keeps both test_rincoin and test_rincoin-qt out
+# of every artifact (configure.ac: use_gui_tests defaults to use_tests, and the
+# qt-test build gates on use_gui_tests). The substring 'bin/test_rincoin' matches
+# both names, so one grep asserts neither shipped. check-matrix treats any hit as
+# fail-closed, so a future EXTRA_CONFIG=--enable-tests cannot quietly re-inflate
+# the release by ~59 MB without tripping the signing gate.
+TEST_BIN := bin/test_rincoin
 
 # Version assembled from configure.ac (RIP-0001: GENERATION.MAJOR.MINOR + RC).
 # Parsed with paren-free greps: a literal ')' inside a $(shell ...) would close
@@ -160,7 +172,7 @@ $(strip $(1)):
 	cd "$$(ROOT)" && ./autogen.sh
 	cd "$$(ROOT)" && CONFIG_SITE="$$(ROOT)/depends/$(strip $(2))/share/config.site" \
 	    ./configure --prefix=/ $(if $(filter 1,$(5)),--with-gui=qt5,--without-gui) \
-	        --disable-bench $(if $(filter 1,$(4)),--with-pic,) $$(EXTRA_CONFIG)
+	        --disable-bench --disable-tests $(if $(filter 1,$(4)),--with-pic,) $$(EXTRA_CONFIG)
 	@echo "==> [$(strip $(1))] make -j$$(JOBS)"
 	$$(MAKE) -C "$$(ROOT)" -j$$(JOBS)
 	@echo "==> [$(strip $(1))] install into staging"
@@ -326,7 +338,19 @@ check-matrix:
 	   echo "  refusing to hand an unverified ARM64 GUI binary to the signing key" >&2; \
 	   exit 1; \
 	 fi; \
-	 echo "==> [check-matrix] aarch64: rincoin-qt=$$has (expected $(EXPECT_ARM_GUI)) — OK"
+	 echo "==> [check-matrix] aarch64: rincoin-qt=$$has (expected $(EXPECT_ARM_GUI)) — OK"; \
+	 for pair in "linux:$$l" "aarch64:$$a"; do \
+	   host=$${pair%%:*}; arc=$${pair#*:}; \
+	   tar -tzf "$$arc" | grep -q '$(TEST_BIN)' && { \
+	     echo "check-matrix: FAIL — $$host tarball ships a $(TEST_BIN)* binary" >&2; \
+	     echo "  release artifacts must not contain test binaries (--disable-tests)" >&2; \
+	     exit 1; }; \
+	 done; \
+	 $$zl "$$w" | grep -q '$(TEST_BIN)' && { \
+	   echo "check-matrix: FAIL — win64 zip ships a $(TEST_BIN)*.exe binary" >&2; \
+	   echo "  release artifacts must not contain test binaries (--disable-tests)" >&2; \
+	   exit 1; }; \
+	 echo "==> [check-matrix] no test_rincoin* binary in any artifact"
 # grep anchoring above is asymmetric ON PURPOSE:
 #   presence checks are exact (-x / \.exe) so a stray rincoin-qt_test can't fake
 #   a GUI; the ARM ABSENCE check is an unanchored substring so that ANY qt-ish

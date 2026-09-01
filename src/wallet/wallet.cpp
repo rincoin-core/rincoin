@@ -697,7 +697,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         // MWEB: No need to replace HD seed, which would complicate MWEB key management.
         // So for now, we don't generate a new seed.
-        // 
+        //
         // If we are using descriptors, make new descriptors with a new seed
         //if (IsWalletFlagSet(WALLET_FLAG_DESCRIPTORS) && !IsWalletFlagSet(WALLET_FLAG_BLANK_WALLET)) {
         //    SetupDescriptorScriptPubKeyMans();
@@ -1668,7 +1668,7 @@ CAmount CWallet::GetDebit(const CTransaction& tx, const boost::optional<MWEB::Wa
         if (!MoneyRange(nDebit))
             throw std::runtime_error(std::string(__func__) + ": value out of range");
     }
-    
+
     return nDebit;
 }
 
@@ -1746,7 +1746,7 @@ CAmount CWallet::GetChange(const CTransaction& tx, const boost::optional<MWEB::W
             nChange += pegout.GetAmount();
             if (!MoneyRange(nChange))
                 throw std::runtime_error(std::string(__func__) + ": value out of range");
-        
+
         }
     }
 

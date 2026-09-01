@@ -6,6 +6,7 @@
 #include <wallet/wallet.h>
 
 #include <chain.h>
+#include <chainparams.h>    // RIP-0011: Params(), Consensus::BIP9Deployment
 #include <consensus/consensus.h>
 #include <consensus/validation.h>
 #include <fs.h>
@@ -20,6 +21,7 @@
 #include <primitives/transaction.h>
 #include <script/descriptor.h>
 #include <script/script.h>
+#include <script/standard.h>  // RIP-0011: Solver(), TxoutType
 #include <script/signingprovider.h>
 #include <txmempool.h>
 #include <util/bip32.h>
@@ -3152,6 +3154,37 @@ bool CWallet::CreateTransaction(
         FeeCalculation& fee_calc_out,
         bool sign)
 {
+    // RIP-0011: refuse to create outputs paying to witness v1 (Taproot) or any
+    // later witness version while that deployment is sealed. Such outputs are
+    // anyone-can-spend at the consensus level. This is reachable from
+    // sendtoaddress, not only from the raw transaction APIs: DecodeDestination
+    // accepts genuine bech32m v1 addresses (key_io.cpp:112-144) and maps them to
+    // WitnessUnknown, which GetScriptForDestination renders as OP_1 <program>.
+    //
+    // The deployment parameter is read directly rather than querying activation
+    // state: VersionBitsState requires cs_main, and cs_wallet is already held
+    // here (lock-order reversal).
+    const Consensus::Params& consensus = Params().GetConsensus();
+    if (consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nStartTime
+            == Consensus::BIP9Deployment::NEVER_ACTIVE) {
+        for (const CRecipient& recipient : vecSend) {
+            // StealthAddress recipients carry no script: GetScript() asserts on
+            // !IsMWEB() (script/address.cpp:25). Script-bearing MWEB constructs
+            // are classified as WITNESS_MWEB_PEGIN / _HOGADDR before the
+            // WITNESS_UNKNOWN fallback (script/standard.cpp:141,145).
+            if (recipient.IsMWEB()) continue;
+
+            std::vector<std::vector<unsigned char>> solutions;
+            const TxoutType type = Solver(recipient.receiver.GetScript(), solutions);
+            if (type == TxoutType::WITNESS_V1_TAPROOT || type == TxoutType::WITNESS_UNKNOWN) {
+                error = _("Cannot create an output paying to witness version 1 or "
+                          "later: this deployment is never activated on this "
+                          "network and such outputs are anyone-can-spend.");
+                return false;
+            }
+        }
+    }
+
     int nChangePosIn = nChangePosInOut;
 
     Optional<AssembledTx> tx1 = TxAssembler(*this).AssembleTx(vecSend, coin_control, nChangePosIn, sign, error);

@@ -330,7 +330,7 @@ class P2PInterface(P2PConnection):
         self.nServices = 0
 
         self.support_addrv2 = support_addrv2
-        
+
     def peer_connect_send_version(self, services):
         # Send a version msg
         vt = msg_version()
@@ -487,7 +487,7 @@ class P2PInterface(P2PConnection):
 
     def wait_for_mwebheader(self, blockhash, timeout=60):
         """Waits for an mwebheader message
-        
+
         The hash of the block header must match the provided blockhash"""
         def test_function():
             last_mwebheader = self.last_message.get('mwebheader')
@@ -499,7 +499,7 @@ class P2PInterface(P2PConnection):
 
     def wait_for_mwebleafset(self, blockhash, timeout=60):
         """Waits for an mwebleafset message
-        
+
         The hash of the block header must match the provided blockhash"""
         def test_function():
             last_mwebleafset = self.last_message.get('mwebleafset')

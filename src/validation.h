@@ -199,7 +199,7 @@ bool ActivateBestChain(BlockValidationState& state, const CChainParams& chainpar
 
 /**
  * Make the provided index the tip of the chain, regardless of the amount of work.
- * 
+ *
  * Unlike ActivateBestChain, this only updates the provided coins view, not the active chain state.
  * No calls to any validationinterface callbacks will be made.
  */

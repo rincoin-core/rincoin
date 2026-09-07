@@ -1,12 +1,14 @@
 # Rincoin Core
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0--rc1-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 [![RIPs](https://img.shields.io/badge/RIPs-rincoin--rips-blueviolet.svg)](https://github.com/Aevust/rincoin-rips)
 
 Rincoin is a decentralized digital currency derived from the Litecoin codebase (itself a long-established Bitcoin derivative) that introduces a new Proof-of-Work hashing algorithm called **RinHash**. RinHash is a hybrid PoW algorithm combining BLAKE3, Argon2d, and SHA3-256, designed to provide security while enabling broad, accessible participation during the network's formative phase. This README provides an overview of Rincoin's specifications, the RinHash algorithm, and network parameters.
 
-> **Current release: v1.1.0** — the *Customized Halving* release. Versions follow `v[GENERATION].[MAJOR].[MINOR]` per RIP-0001 (here: GENERATION=1, MAJOR=1, MINOR=0). The MAJOR field is incremented from the previous `v1.0.6` release because v1.1.0 carries protocol-level (hard fork) changes; per RIP-0001, a hard fork is not shipped as a maintenance (MINOR) release. See the **Release: v1.1.0** section below.
+> **Release candidate: `v1.1.0-rc1`.** This tag is a candidate for **v1.1.0**, the *Customized Halving* release; it is published for testing and is not the final release. Report issues at <https://github.com/Rin-coin/rincoin/issues>.
+>
+> Versions follow `v[GENERATION].[MAJOR].[MINOR]` per RIP-0001 (here: GENERATION=1, MAJOR=1, MINOR=0). The MAJOR field is incremented from the previous `v1.0.6` release because v1.1.0 carries protocol-level (hard fork) changes; per RIP-0001, a hard fork is not shipped as a maintenance (MINOR) release. See the **Release: v1.1.0** section below.
 
 ---
 
@@ -16,7 +18,8 @@ Rincoin Core has been engineered and reviewed with the goal of mathematical and 
 
 - **P2P Network Sovereignty (confirmed in both Sim and Core):** Legacy network identifiers have been replaced with Rincoin-native values across two distinct layers. (1) **Message-start magic bytes** `0x52 0x49 0x4E 0x43` ("RINC"), defined in `src/chainparams.cpp`. (2) **Internal IPv6 prefix** `INTERNAL_IN_IPV6_PREFIX = FD 2D DD 82 F5 C8` — `0xFD + sha256("rincoin")[0:5]`, replacing the upstream `FD 6B 88 C0 87 24` (`sha256("bitcoin")[0:5]`), confirmed in `src/netaddress.h` with inline comment. This prefix is used when serializing non-IP peers (Tor/I2P/CJDNS) in ADDR messages. `CNetAddr::SetInternal()` in `netaddress.cpp` is a separate mechanism that hashes individual DNS seed names per-peer for internal tracking — already Rincoin-native by using Rincoin's own seeds. Note: minor residual upstream naming artifacts remain in `netaddress.h` (`#ifndef BITCOIN_NETADDRESS_H`, `bitcoin-config.h` include, copyright header) but have no functional impact on network sovereignty.
 - **Customized Consensus & Emission (Scenario II):** Rincoin implements a multi-phase emission schedule. It begins with 210,000-block intervals (~145 days) and dilates to multi-million-block epochs after height 840,000 to slow subsidy decay. It culminates in a perpetual terminal reward (0.6 RIN), which is intended to support a long-term security budget. The dilation at block 840,000 is a hard fork, implemented in **v1.1.0** (see below). Consensus rules, including the custom base58 address prefix (prefix `60`), are validated by the test suite.
-- **Continuous Integration:** The active validation and utility test suites report a 100% PASS state. Legacy upstream benchmarks that depend on obsolete upstream block data have been decoupled as not applicable to Rincoin, keeping the CI pipeline stable for ongoing development.
+- **Test suites:** `make check` passes in full: 80 unit suites (500 cases) and the util tests. The functional suite runs 209 scripts, of which 53 fail; every one of those failures is reproduced identically in Rincoin-Sim and stems from test-framework assumptions inherited from upstream (Litecoin address prefixes, and a block-identity helper that computes SHA256d where this chain uses RinHash). None is specific to Rincoin Core; the breakdown is in the release notes. Legacy upstream benchmarks that assert against pre-fork Litecoin block data are excluded from `make check`.
+- **Automated CI:** Not yet in place; scoped as a separate effort (see the Roadmap).
 
 ---
 
@@ -122,6 +125,14 @@ The MWEB/Taproot sealing and the window change land in the **same commit**, so n
 
 The `-vbparams` parser in `chainparams.cpp` is fixed to zero-initialize the `nStartHeight`/`nTimeoutHeight` locals (previously undefined behavior on the legacy 3-argument form). This is the Rincoin-side application of a root-cause fix contributed upstream as [litecoin-project/litecoin#1095](https://github.com/litecoin-project/litecoin/issues/1095).
 
+### F. NODE_RIN3 Service Bit and Protocol Version 70018, RIP-0009
+
+Upgraded nodes advertise the `NODE_RIN3` service bit (bit 25) and protocol version 70018. Automatic outbound connections prefer peers that advertise it (`GetDesirableServiceFlags`), so upgraded nodes keep a connected relay subgraph for RIN3 transactions, which legacy nodes drop as non-standard. Inbound connections from legacy peers are still accepted, and manual connections (`-addnode` / `-connect`) are exempt, so nodes that have not upgraded keep following the chain until block 840,000. Non-consensus.
+
+### G. Supply Accounting, Stage A, RIP-0002
+
+`GetTotalSubsidy()` in `src/validation.cpp` expresses the emission schedule's integral in closed form over the Customized Halving phase boundaries, and unit tests pin it against a brute-force sum of `GetBlockSubsidy()`, including the height at which cumulative issuance reaches 168,000,000 RIN (234,587,500). This is accounting only: `GetBlockSubsidy()` is unchanged and no consensus rule reads the new constant. Enforcement of the cap is Stage B and requires a separate RIP.
+
 ### Hard fork coordination
 
 The block-840,000 hard fork requires advance coordination: at minimum 30 days' notice to seed operators and mining pools, and block-height monitoring from block 800,000. Activation timing and migration details are published in the corresponding RIPs and the technical roadmap. All consensus changes are verified at a 1/1000 scale in Rincoin-Sim before mainnet deployment.
@@ -135,6 +146,7 @@ The following items are scoped but are **not** part of v1.1.0. Each remains subj
 | Item | Notes |
 | :--- | :--- |
 | **Minimum peer version 70018** (peer gate) | Originally scoped to coincide with the block-840,000 hard fork, now separated into its own peer gate with **independent activation timing** (to be determined). It is **not** tied to block 840,000. |
+| **Automated CI** | Build and unit tests as blocking checks; the functional suite with a documented exclusion list derived from the known-failure set above. Scoped as a separate effort. |
 | **Guix reproducible builds** | Deterministic build environment for third-party verification (includes Argon2d packaging and cross-compilation support). Scoped as a separate effort. |
 | **`netaddress.h` naming artifacts** | Residual upstream identifiers (`BITCOIN_NETADDRESS_H`, `bitcoin-config.h` include, copyright header) remain. No functional impact on network sovereignty; cleanup is cosmetic. |
 | **SQLite descriptor-wallet migration** | Precondition for any future MWEB mainnet re-activation. Tracked against upstream Litecoin's SQLite + MWEB integration. |

@@ -192,10 +192,15 @@ preference. This mirrors the outbound preference Bitcoin applied to
 `NODE_WITNESS` at the SegWit rollout and is what preserves soft-fork
 topology up to the activation height. (6f7b056ba)
 
-DNS seed queries now carry the `x<hex>` service filter including
-`NODE_RIN3`. Seeders serving this network must therefore run v1.1.0.
-The DNS seeds are `seed.rincoin.org` and `seed.rincoin.net`.
-(b0966f7fe)
+`GetDesirableServiceFlags` now includes `NODE_RIN3`, so a v1.1.0 node
+queries its DNS seeds with the filter prefix `x3000009`
+(`NODE_NETWORK | NODE_WITNESS | NODE_MWEB | NODE_RIN3`). The project's
+seeder was given that whitelist entry on 2026-08-28 (Aevust/seeder#2);
+before it, the default whitelist rejected the filter and such queries
+returned empty. Anyone running a DNS seeder for this network needs the
+same entry. Until nodes advertising RIN3 appear, the filtered query
+answers with nothing, which is expected rather than a failure. The
+seeds are `seed.rincoin.org` and `seed.rincoin.net`. (b0966f7fe)
 
 Measured on this tree: `localservices` reports `0000000003800449`
 with `RIN3` among the names, and the version message on the wire
@@ -370,7 +375,7 @@ the test hangs rather than fails.
 | `p2p_rin3_services.py` | 3 subtests PASS |
 | `validation_tests` | 4 cases PASS (0.29 s, sweep included) |
 
-### Consensus boundary
+### Consensus behaviour on regtest
 
 ```
 $ rincoin-cli -regtest getblockstats 839 | grep subsidy
@@ -378,6 +383,48 @@ $ rincoin-cli -regtest getblockstats 839 | grep subsidy
 $ rincoin-cli -regtest getblockstats 840 | grep subsidy
   "subsidy": 400000000,
 ```
+
+### Consensus behaviour on a mined testnet chain
+
+The same rules were exercised on a testnet chain mined from genesis on
+this tree, where the difficulty adjustment is live rather than pinned
+at the regtest minimum. The chain is private: it was mined solely by
+this node with `generatetoaddress` and had no peers at any point.
+
+Every Customized Halving phase boundary, in satoshi:
+
+| boundary | subsidy before | subsidy at and after |
+| ---- | ---- | ---- |
+| 210 | 5000000000 | 2500000000 |
+| 420 | 2500000000 | 1250000000 |
+| 630 | 1250000000 | 625000000 |
+| **840** | **625000000** | **400000000** |
+
+The MWEB deployment, as observed while the chain was being mined.
+`getblockchaininfo` reports the state that applies to the next block,
+so a tip of 839 already reports `started` with `since` 840:
+
+| tip | bip8 status | since |
+| ---- | ---- | ---- |
+| 18 | defined | 0 |
+| 839 | started | 840 |
+| 1049 | locked_in | 1050 |
+| 1260 | active | 1260 |
+
+RIN3 enforcement, both directions, at a tip well above the testnet
+fork height of 840:
+
+- A wallet transaction was created with `sendtoaddress` and mined. Its
+  version is `0x52494e33`.
+- A transaction built with `createrawtransaction`, which emits version
+  2, was signed and submitted with `sendrawtransaction`. The node
+  answered with error -26 `bad-tx-rinhash-version`, and the
+  transaction is absent from the mempool afterwards.
+
+A record of this run, listing the commit, the digests of the binaries
+that produced it, the chain's genesis hash and peer count, and every
+value above, is published with the release together with the script
+that produces it.
 
 ### Relation to Rincoin-Sim
 
